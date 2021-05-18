@@ -1,0 +1,92 @@
+# '''
+# Personr
+# #PRODUKT = SRU
+# #BLANKETT
+# decimal .
+# negative -
+
+# INFO
+# ord obl post                    övr
+# 1.  Y   #DATABESKRIVNING_START
+# 2.  Y   #PRODUKT                skall alltid vara SRU
+# 3.  N   #MEDIAID                Får användas av uppgiftslämnaren för exempelvis numrering av filer. Lagras ej i skattedatabasen
+# 4.  N   #SKAPAD                 Datum (ÅÅÅÅMMDD) samt tid (TTMMSS)
+# 5.  N   #PROGRAM                Framställande program
+# 6.  Y   #FILNAMN                (en post) Filen ska heta BLANKETTER.SRU
+# 7.  Y   #DATABESKRIVNING_SLUT
+# 8.  Y   #MEDIELEV_START
+# 9.  Y   #ORGNR                  Pers/org nr (ÅÅÅÅMMDDNNNN)
+# 10. Y   #NAMN                   Uppgiftslämnarens namn
+# 11. N   #ADRESS                 Uppgiftslämnarens utdelningsadress
+# 12. Y   #POSTNR                 Uppgiftslämnarens postnummer
+# 13. Y   #POSTORT                Uppgiftslämnarens postort
+# 14. N   #AVDELNING              Kontaktpersonens avdelning eller liknande
+# 15. N   #KONTAKT                Kontaktperson
+# 16. N   #EMAIL
+# 17. N   #TELEFON
+# 18. N   #FAX
+# 19. Y   #MEDIELEV_SLUT
+# BLANKETT
+# 1.  Y   #BLANKETT                 Anger vilket blankettblock som avses
+# 2.  Y   #IDENTITET                Pers-/orgnummer för uppgiftslämnaren (ÅÅÅÅMMDDNNNN) Datum (ÅÅÅÅMMDD) samt tid (TTMMSS)
+# 3.  N   #NAMN                     Uppgiftslämnarens namn
+# 4.  Y   #UPPGIFT                  Den fältkod som finns angiven i fältnamns-tabellen för respektive blankettblock samt värde
+# 4.  Y   #SYSTEMINFO               Får användas av uppgiftslämnaren för egna interna uppgifter. Endast en post får lämnas. Läses ej av Skatteverket
+# 5.  Y   #BLANKETTSLUT             Markerar att blankettblocket slutar
+# 6.  Y   #FIL_SLUT                 Filen avslutas med detta.
+
+# #DATABESKRIVNING_START
+# #PRODUKT SRU
+# #SKAPAD 20210517 110858
+# #PROGRAM SRU-Maker
+# #FILNAMN BLANKETTER.SRU
+# #DATABESKRIVNING_SLUT
+# #MEDIELEV_START
+# #ORGNR 195207140756
+# #NAMN Kalle
+# #POSTNR 12345
+# #POSTORT Banis
+# #MEDIELEV_SLUT
+
+
+namn: &namn 'Juaspo'
+persnr: &persnr '0987654321'
+
+general:
+  ext: "SRU"
+  date_format: 'yyyymmdd'
+
+tastyworks:
+  INFO:
+    DATABESKRIVNING_START:
+      pos: 1
+    PRODUKT SRU:
+      pos: 2
+      value: 'SRU'
+    MEDIAID: 'ignore'
+    SKAPAD:
+      pos: 4
+    PROGRAM:
+      pos: 5
+      value: 'declare_tax'
+    FILNAMN:
+      pos: 6
+      value: 'BLANKETTER.SRU'
+    DATABESKRIVNING_SLUT:
+      pos: 7
+    MEDIELEV_START:
+      pos: 8
+    ORGNR:
+      pos: 9
+      value: *persnr
+    NAMN:
+      pos: 10
+      value: *namn
+    POSTNR:
+      pos: 11
+      value: 12345
+    POSTORT:
+      pos: 12
+      value: 'Wakanda'
+    MEDIELEV_SLUT:
+      pos: 19
