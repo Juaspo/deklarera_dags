@@ -53,40 +53,69 @@ namn: &namn 'Juaspo'
 persnr: &persnr '0987654321'
 
 general:
-  ext: "SRU"
-  date_format: 'yyyymmdd'
+  date_format: &date_format 'yyyymmdd'
 
-tastyworks:
-  INFO:
-    DATABESKRIVNING_START:
-      pos: 1
-    PRODUKT SRU:
-      pos: 2
-      value: 'SRU'
-    MEDIAID: 'ignore'
-    SKAPAD:
-      pos: 4
-    PROGRAM:
-      pos: 5
-      value: 'declare_tax'
-    FILNAMN:
-      pos: 6
-      value: 'BLANKETTER.SRU'
-    DATABESKRIVNING_SLUT:
-      pos: 7
-    MEDIELEV_START:
-      pos: 8
-    ORGNR:
-      pos: 9
-      value: *persnr
-    NAMN:
-      pos: 10
-      value: *namn
-    POSTNR:
-      pos: 11
-      value: 12345
-    POSTORT:
-      pos: 12
-      value: 'Wakanda'
-    MEDIELEV_SLUT:
-      pos: 19
+config_groups:
+  tastyworks:
+    create_file:
+      INFO:
+        metadata:
+          file_name: "INFO"
+          extension: "SRU"
+          #date_format: *date_format
+        data:
+          DATABESKRIVNING_START:
+            pos: 1
+          PRODUKT SRU:
+            pos: 2
+            value: 'SRU'
+          MEDIAID: 'ignore'
+          SKAPAD:
+            value:
+              - "CURRENT_DATE"
+              - "CURRENT_TIME"
+            pos: 4
+          PROGRAM:
+            pos: 5
+            value: 'declare_tax'
+          FILNAMN:
+            pos: 6
+            value: 'BLANKETTER.SRU'
+          DATABESKRIVNING_SLUT:
+            pos: 7
+          MEDIELEV_START:
+            pos: 8
+          ORGNR:
+            pos: 9
+            value: *persnr
+          NAMN:
+            pos: 10
+            value: *namn
+          POSTNR:
+            pos: 11
+            value: 12345
+          POSTORT:
+            pos: 12
+            value: 'Wakanda'
+          MEDIELEV_SLUT:
+            pos: 19
+      BLANKETTER:
+        metadata:
+          extension: "SRU"
+          file_name: "BLANKETTER"
+        data:
+          BLANKETT:
+            pos: 1 
+            value: "K4-2021P4"
+          IDENTITET:
+            pos: 2
+            value:
+              - *persnr
+              - "CURRENT_DATE"
+              - "CURRENT_TIME"
+          NAMNE:
+            pos: 3
+            value: *namn
+          UPPGIFT:
+            pos: 4
+            value: 
