@@ -13,6 +13,7 @@ import click
 import logging
 from logging import Logger
 import os
+from datetime import datetime
 
 
 #logging.getLogger().setLevel(logging_level)
@@ -37,11 +38,17 @@ def main(cfg_file: str, logging_level: str, file_path: str) -> int:
 
     logger.info("printing cfg content")
     #print(cfg)
-    parse_data(logger, cfg)
+    parsed_content = parse_data(logger, cfg)
+
+    for content in parsed_content:
+
+        write_file(logger, parsed_content[content].get("data", ""),
+                   parsed_content[content]["metadata"].get("filename", ""),
+                   parsed_content[content]["metadata"].get("file_path", ""),
+                   parsed_content[content]["metadata"].get("extension", "txt"))
 
 
-
-    write_file(logger, cfg, "INFO", file_path, "txt")
+    #write_file(logger, cfg, "INFO", file_path, "txt")
 
 
     return 0
@@ -51,6 +58,8 @@ def parse_data(logger: Logger, cfg_groups: str) -> str:
     Takes input data 
     '''
     create_file_data = {}
+    separator = " "
+    identiet = ""
 
     for config_group in cfg_groups:
         logger.debug("config_groups: %s", config_group)
@@ -58,27 +67,58 @@ def parse_data(logger: Logger, cfg_groups: str) -> str:
         for post in cfg_groups[config_group]:
             logger.debug("post: %s", post)
             if post == "create_file":
-                create_file_data[config_group]={}
                 for file_to_create in cfg_groups[config_group]['create_file']:
+                    data_txt = ""
                     file_cfg = cfg_groups[config_group]['create_file'][file_to_create]
                     logger.debug("file_cfg: %s", file_cfg)
                     logger.debug("file_to_create: %s", file_to_create)
-
+                    create_file_data[file_to_create] = {}
                     if "metadata" in file_cfg:
-                        create_file_data[config_group][file_to_create] = {}
-                        if "extension" in file_cfg:
-                            create_file_data[config_group][file_to_create]["file_extension"] = file_cfg["extension"]
-                        if "date_format" in file_cfg:
-                            create_file_data[config_group][file_to_create]["date_format"] = file_cfg["date_format"]
+                        create_file_data[file_to_create]["metadata"] = file_cfg["metadata"]
+                        separator = file_cfg["metadata"].get("separator", " ")
+                    if "data" in file_cfg:
+                        for data_entry in file_cfg["data"]:
+                            logger.debug("data_entry: %s", data_entry)
+                            value = ""
+                            if file_cfg["data"][data_entry]:
+                                value = str(file_cfg["data"][data_entry].get("value", ""))
+                                date_value = file_cfg["data"][data_entry].get("datetime")
+                                if value == "ORGNR":
+                                    identiet = value
 
+                                if (date_value):
+                                    value = get_datetime(logger, date_value)
+                                    identiet = identiet + " " + value
+
+                            if value == "":
+                                data_txt = data_txt + data_entry + "\n"
+                            else:
+                                data_txt = data_txt + data_entry + separator + value +"\n"
+                        create_file_data[file_to_create]["data"] = data_txt
 
                     for entry in file_cfg:
                         logger.debug("entry: %s", entry)
-                    
-    
-    logger.debug("create_file_data: %s", create_file_data)
 
+                    logger.info("create_file_data: %s", create_file_data)
+                    logger.debug("data_txt: %s", data_txt)
 
+    return create_file_data
+
+def get_datetime(logger: Logger, date_format: str) -> datetime:
+    '''
+    Fetch date and time and return value depending on
+    format argument
+
+    input:
+        logger: Logger
+        date_time: str - String of datetime format code
+    return:
+        datetime: str
+    '''
+
+    date_now = datetime.today().strftime(date_format)
+    #logger.debug("date format: %s, converted to date: %s", date_format, date_now)
+    return date_now
 
 def create_logger(logging_level: str) -> Logger:
     '''
