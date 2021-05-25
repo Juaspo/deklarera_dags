@@ -14,11 +14,26 @@ import logging
 from logging import Logger
 import os
 from datetime import datetime
+import csv
 
 
 #logging.getLogger().setLevel(logging_level)
 
 g_GENERAL_CFG = {}
+g_EXAMPLE_CSV = """TAX YEAR,FILE_CLOSING_DATE,CLOSE_DATE,OPENING_TRANSACTION,OPEN_DATE,UNDERLYING_SYMBOL,SECURITY_DESCRIPTION,QUANTITY,PROCEEDS,COST,CODE,GAIN_LOSS_ADJ,TERM,8949_BOX,GAIN_LOSS,CLOSING_TRANSACTION
+2020,05/13/21,12/02/20,BTO,11/27/20,PLTR,CALL PLTR   02/19/21    33,1,$00000239.84,$00000946.14, , ,S,B,-$00000706.30,STC
+2020,05/13/21,12/02/20,BTO,11/27/20,PLTR,CALL PLTR   03/19/21    35,1,$00000231.84,$00001051.14, , ,S,B,-$00000819.30,STC
+2020,05/13/21,12/02/20,BTO,11/27/20,PLTR,CALL PLTR   03/19/21    35,1,$00000231.84,$00001051.13, , ,S,B,-$00000819.29,STC
+2020,05/13/21,12/17/20,BTO,11/23/20,LOGI,CALL LOGI   12/18/20    95,1,$00000026.84,$00000046.14, , ,S,B,-$00000019.30,STC
+2020,05/13/21,12/02/20,BTO,12/02/20,TSLA,PUT  TSLA   12/18/20   555,1,$00003899.77,$00003841.14, , ,S,B,$00000058.63,STC
+"""
+
+g_BLANKETT_DATA = {
+    "antal": 0,
+    "aktie": 1,
+    "sell": 2,
+    "cost": 3
+}
 
 @click.command()
 @click.option('-c', '--cfg_file', 'cfg_file', default='cfg_deklarera_dags.yml', help='path to config file to us. Defailt is cfg_declare_tax.yml')
@@ -37,7 +52,6 @@ def main(cfg_file: str, logging_level: str, file_path: str) -> int:
         sys.exit(os.EX_CONFIG)
 
     logger.info("printing cfg content")
-    #print(cfg)
     parsed_content = parse_data(logger, cfg)
 
     for content in parsed_content:
@@ -47,9 +61,7 @@ def main(cfg_file: str, logging_level: str, file_path: str) -> int:
                    parsed_content[content]["metadata"].get("file_path", ""),
                    parsed_content[content]["metadata"].get("extension", "txt"))
 
-
-    #write_file(logger, cfg, "INFO", file_path, "txt")
-
+    write_file(logger, g_EXAMPLE_CSV, "csv", file_path, "txt")
 
     return 0
 
@@ -60,6 +72,7 @@ def parse_data(logger: Logger, cfg_groups: str) -> str:
     create_file_data = {}
     separator = " "
     identiet = ""
+    csv_list = []
 
     for config_group in cfg_groups:
         logger.debug("config_groups: %s", config_group)
@@ -73,9 +86,13 @@ def parse_data(logger: Logger, cfg_groups: str) -> str:
                     logger.debug("file_cfg: %s", file_cfg)
                     logger.debug("file_to_create: %s", file_to_create)
                     create_file_data[file_to_create] = {}
+
+                    # Handle metadata from yaml file
                     if "metadata" in file_cfg:
                         create_file_data[file_to_create]["metadata"] = file_cfg["metadata"]
                         separator = file_cfg["metadata"].get("separator", " ")
+
+                    # Handle data in yaml config file
                     if "data" in file_cfg:
                         for data_entry in file_cfg["data"]:
                             logger.debug("data_entry: %s", data_entry)
@@ -96,13 +113,49 @@ def parse_data(logger: Logger, cfg_groups: str) -> str:
                                 data_txt = data_txt + data_entry + separator + value +"\n"
                         create_file_data[file_to_create]["data"] = data_txt
 
-                    for entry in file_cfg:
-                        logger.debug("entry: %s", entry)
-
                     logger.info("create_file_data: %s", create_file_data)
                     logger.debug("data_txt: %s", data_txt)
 
+                    # Handle parsing of data from input stream
+                    if "parse_data" in file_cfg:
+                        for parse_name in file_cfg["parse_data"]:
+                            if parse_name == "config":
+                                csv_delimiter = file_cfg["parse_data"][parse_name].get("delimiter", ",")
+                                csv_quotechar = file_cfg["parse_data"][parse_name].get("quotechar", "|")
+
+                                csv_list = csv_handler(logger, csv_string=g_EXAMPLE_CSV, csv_delimiter=csv_delimiter)
+                            else:
+                                for parse_entry_value in file_cfg["parse_data"][parse_name]:
+                                    logger.debug("parse_entry: %s", parse_entry_value)
+                                    
+                                    #continue with parsing of data values
+
+
     return create_file_data
+
+def csv_handler(logger: Logger, filename = None, csv_string=None, csv_delimiter = ',', csv_quotechar = '|'):
+    '''
+    TODO write info
+
+    '''
+    if filename:
+        with open(filename, newline='') as csvfile:
+            csv_content = csv.reader(g_EXAMPLE_CSV, delimiter=csv_delimiter, quotechar=csv_quotechar)
+            logger.debug("csv content: %s, delimiter: %s", csv_content, csv_delimiter)
+            for row in csv_content:
+                print(', '.join(row))
+    elif csv_string:
+        csv_list = []
+        csv_lines = csv_string.splitlines()
+        for line in csv_lines:
+            csv_row = line.split(csv_delimiter)
+            csv_list.append(csv_row)
+
+        logger.debug("string csv: %s", csv_list)
+        return csv_list
+    else:
+        logger.error("No filename or csv string provided")
+        return None
 
 def get_datetime(logger: Logger, date_format: str) -> datetime:
     '''
@@ -128,8 +181,6 @@ def create_logger(logging_level: str) -> Logger:
     return:
         logger :Logger
     '''
-    #logging.basicConfig(level=getattr(logging, logging_level.upper(), 10))
-
     logger = logging.getLogger(__name__)
     logger.setLevel(getattr(logging, logging_level.upper(), 10))
     formatter = logging.Formatter('%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',  datefmt='%Y-%m-%d:%H:%M:%S')
@@ -173,7 +224,7 @@ def write_file(logger: Logger, content_str: str, file_name: str, file_path="", f
     '''
 
     file_path = os.path.join(file_path, file_name + "." + file_extension)
-    logger.debug("File: %s", file_path)
+    logger.info("Creating file: %s", file_path)
     #logger.debug("Content to write: %s", content_str)
 
     f = open(file_path, 'w')

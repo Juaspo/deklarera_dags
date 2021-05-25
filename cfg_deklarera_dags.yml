@@ -99,16 +99,19 @@ config_groups:
             value: "IDENTIET" #special case variable
           NAMN:
             value: *namn
-          parse:
-            UPPGIFT:
-              ANTAL: "QUANTITY"
-              AKTIE: "UNDERLYING_SYMBOL"
-              SELL: "PROCEEDS"
-              COST: "COST"
-              SUMMA:
-                - "SELL"
-                - "COST"
-          calculate:
-            SUMMA_KOP: 
-              
-              value: "TEXT"
+        parse_data:
+          config:
+            delimiter: ','
+
+          UPPGIFT:
+            antal: "QUANTITY"
+            aktie: "UNDERLYING_SYMBOL"
+            sell: "PROCEEDS"
+            cost: "COST"
+            summa:
+              - "sell"
+              - "cost"
+        calculate:
+          SUMMA_KOP: 
+            
+            value: "TEXT"
