@@ -38,34 +38,44 @@ g_BLANKETT_DATA = {
 @click.command()
 @click.option('-c', '--cfg_file', 'cfg_file', default='cfg_deklarera_dags.yml', help='path to config file to us. Defailt is cfg_declare_tax.yml')
 @click.option('-l', '--logging_level', 'logging_level', default='INFO', help='set logging severity DEBUG INFO WARNING ERROR CRITICAL. Default INFO')
-@click.option('-o', '--output', 'file_path', default='./', help='set generated file destination. Default ./')
+@click.option('-i', '--input', 'ifile_path', help='input file for parsing')
+@click.option('-o', '--output', 'ofile_path', help='set generated file destination. Default ./')
 
 
-def main(cfg_file: str, logging_level: str, file_path: str) -> int:
+def main(cfg_file: str, logging_level: str, ifile_path: str, ofile_path: str) -> int:
+
+    global g_EXAMPLE_CSV
+
+    if not sys.stdin.isatty():
+        global g_EXAMPLE_CSV
+        g_EXAMPLE_CSV = ""
+        input_stream = sys.stdin
+        for line in input_stream:
+            g_EXAMPLE_CSV = g_EXAMPLE_CSV + line
 
     logger = create_logger(logging_level)
+    logger.debug("Piped text: %s", g_EXAMPLE_CSV)
 
     cfg = get_config(logger, cfg_file)
-
     if not cfg:
         logger.error("missing config exiting")
         sys.exit(os.EX_CONFIG)
+    #logger.info("printing cfg content")
 
-    logger.info("printing cfg content")
-    parsed_content = parse_data(logger, cfg)
+    parsed_content = parse_data(logger, cfg, ifile_name=ifile_path, input_stream=g_EXAMPLE_CSV)
 
     for content in parsed_content:
+        if "metadata" in parsed_content[content]:
+            write_file(logger, parsed_content[content].get("data", ""),
+                    parsed_content[content]["metadata"].get("filename", ""),
+                    parsed_content[content]["metadata"].get("file_path", ""),
+                    parsed_content[content]["metadata"].get("extension", "txt"))
 
-        write_file(logger, parsed_content[content].get("data", ""),
-                   parsed_content[content]["metadata"].get("filename", ""),
-                   parsed_content[content]["metadata"].get("file_path", ""),
-                   parsed_content[content]["metadata"].get("extension", "txt"))
-
-    write_file(logger, g_EXAMPLE_CSV, "csv", file_path, "txt")
+    #write_file(logger, g_EXAMPLE_CSV, "csv", ofile_path, "txt")
 
     return 0
 
-def parse_data(logger: Logger, cfg_groups: str) -> str:
+def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=None) -> str:
     '''
     Takes input data 
     '''
@@ -73,6 +83,7 @@ def parse_data(logger: Logger, cfg_groups: str) -> str:
     separator = " "
     identiet = ""
     csv_list = []
+    
 
     for config_group in cfg_groups:
         logger.debug("config_groups: %s", config_group)
@@ -86,49 +97,56 @@ def parse_data(logger: Logger, cfg_groups: str) -> str:
                     logger.debug("file_cfg: %s", file_cfg)
                     logger.debug("file_to_create: %s", file_to_create)
                     create_file_data[file_to_create] = {}
+                    
+                    # Check in config if trigger exists otherwise run anyways
+                    if file_cfg.get("trigger", True):
+                        # Handle metadata from yaml file
+                        if "metadata" in file_cfg:
+                            create_file_data[file_to_create]["metadata"] = file_cfg["metadata"]
+                            separator = file_cfg["metadata"].get("separator", " ")
 
-                    # Handle metadata from yaml file
-                    if "metadata" in file_cfg:
-                        create_file_data[file_to_create]["metadata"] = file_cfg["metadata"]
-                        separator = file_cfg["metadata"].get("separator", " ")
+                        # Handle data in yaml config file
+                        if "data" in file_cfg:
+                            for data_entry in file_cfg["data"]:
+                                logger.debug("data_entry: %s", data_entry)
+                                value = ""
+                                if file_cfg["data"][data_entry]:
+                                    value = str(file_cfg["data"][data_entry].get("value", ""))
+                                    date_value = file_cfg["data"][data_entry].get("datetime")
+                                    if value == "ORGNR":
+                                        identiet = value
 
-                    # Handle data in yaml config file
-                    if "data" in file_cfg:
-                        for data_entry in file_cfg["data"]:
-                            logger.debug("data_entry: %s", data_entry)
-                            value = ""
-                            if file_cfg["data"][data_entry]:
-                                value = str(file_cfg["data"][data_entry].get("value", ""))
-                                date_value = file_cfg["data"][data_entry].get("datetime")
-                                if value == "ORGNR":
-                                    identiet = value
+                                    if (date_value):
+                                        value = get_datetime(logger, date_value)
+                                        identiet = identiet + " " + value
 
-                                if (date_value):
-                                    value = get_datetime(logger, date_value)
-                                    identiet = identiet + " " + value
+                                if value == "":
+                                    data_txt = data_txt + data_entry + "\n"
+                                else:
+                                    data_txt = data_txt + data_entry + separator + value +"\n"
+                            create_file_data[file_to_create]["data"] = data_txt
 
-                            if value == "":
-                                data_txt = data_txt + data_entry + "\n"
-                            else:
-                                data_txt = data_txt + data_entry + separator + value +"\n"
-                        create_file_data[file_to_create]["data"] = data_txt
+                        logger.info("create_file_data: %s", create_file_data)
+                        logger.debug("data_txt: %s", data_txt)
 
-                    logger.info("create_file_data: %s", create_file_data)
-                    logger.debug("data_txt: %s", data_txt)
-
-                    # Handle parsing of data from input stream
-                    if "parse_data" in file_cfg:
-                        for parse_name in file_cfg["parse_data"]:
-                            if parse_name == "config":
-                                csv_delimiter = file_cfg["parse_data"][parse_name].get("delimiter", ",")
-                                csv_quotechar = file_cfg["parse_data"][parse_name].get("quotechar", "|")
-
-                                csv_list = csv_handler(logger, csv_string=g_EXAMPLE_CSV, csv_delimiter=csv_delimiter)
-                            else:
-                                for parse_entry_value in file_cfg["parse_data"][parse_name]:
-                                    logger.debug("parse_entry: %s", parse_entry_value)
+                        # Handle parsing of data from input stream
+                        if "parse_data" in file_cfg:
+                            for parse_name in file_cfg["parse_data"]:
+                                if parse_name == "config":
+                                    csv_delimiter = file_cfg["parse_data"][parse_name].get("delimiter", ",")
+                                    csv_quotechar = file_cfg["parse_data"][parse_name].get("quotechar", "|")
                                     
-                                    #continue with parsing of data values
+                                    if ifile_name:
+                                        csv_list = csv_handler(logger, filename=ifile_name, csv_delimiter=csv_delimiter)
+                                    elif input_stream:
+                                        csv_list = csv_handler(logger, csv_string=input_stream, csv_delimiter=csv_delimiter)
+
+                                    
+                                else:
+                                    for parse_entry_value in file_cfg["parse_data"][parse_name]:
+                                        logger.debug("parse_entry: %s", parse_entry_value)
+                                        
+                                        #continue with parsing of data values
 
 
     return create_file_data
@@ -138,20 +156,23 @@ def csv_handler(logger: Logger, filename = None, csv_string=None, csv_delimiter 
     TODO write info
 
     '''
+    csv_list = []
+
+
     if filename:
         with open(filename, newline='') as csvfile:
-            csv_content = csv.reader(g_EXAMPLE_CSV, delimiter=csv_delimiter, quotechar=csv_quotechar)
-            logger.debug("csv content: %s, delimiter: %s", csv_content, csv_delimiter)
+            csv_content = csv.reader(csvfile, delimiter=csv_delimiter, quotechar=csv_quotechar)
             for row in csv_content:
-                print(', '.join(row))
+                csv_list.append(row)
+        logger.debug("returning csv list: %s", csv_list)
+        return csv_list
+
     elif csv_string:
-        csv_list = []
         csv_lines = csv_string.splitlines()
         for line in csv_lines:
             csv_row = line.split(csv_delimiter)
             csv_list.append(csv_row)
-
-        logger.debug("string csv: %s", csv_list)
+        logger.debug("returning csv list: %s", csv_list)
         return csv_list
     else:
         logger.error("No filename or csv string provided")
@@ -222,6 +243,9 @@ def write_file(logger: Logger, content_str: str, file_name: str, file_path="", f
     return:
         -
     '''
+    
+    if not file_path:
+        file_path = ""
 
     file_path = os.path.join(file_path, file_name + "." + file_extension)
     logger.info("Creating file: %s", file_path)

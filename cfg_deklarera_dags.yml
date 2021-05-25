@@ -60,6 +60,7 @@ config_groups:
   tastyworks:
     create_file:
       INFO:
+        trigger: True
         metadata:
           filename: "INFO"
           extension: "log"
@@ -89,6 +90,7 @@ config_groups:
           MEDIELEV_SLUT:
 
       BLANKETTER:
+        trigger: True
         metadata:
           extension: "log"
           filename: "BLANKETTER"
