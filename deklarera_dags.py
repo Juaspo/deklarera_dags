@@ -82,8 +82,9 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
     '''
     create_file_data = {}
     separator = " "
-    identiet = ""
+    identity = None
     csv_list = []
+    date_time = None
     
 
     for config_group in cfg_groups:
@@ -112,16 +113,19 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                                 logger.debug("data_entry: %s", data_entry)
                                 value = ""
                                 if file_cfg["data"][data_entry]:
+                                    # data should be put under "value" key in yaml
                                     value = str(file_cfg["data"][data_entry].get("value", ""))
+
+                                    # Special case handling of data value keys
                                     date_value = file_cfg["data"][data_entry].get("datetime")
-                                    if value == "ORGNR":
-                                        identiet = value
-
+                                    if data_entry == "ORGNR":
+                                        identity = value
                                     if (date_value):
-                                        value = get_datetime(logger, date_value)
-                                        identiet = identiet + " " + value
+                                        date_time = get_datetime(logger, date_value)
+                                        value = date_time
 
-                                if value == "":
+
+                                if value == "" or value is None:
                                     data_txt = data_txt + data_entry + "\n"
                                 else:
                                     data_txt = data_txt + data_entry + separator + value +"\n"
@@ -135,15 +139,18 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                             for parse_name in file_cfg["parse_data"]:
                                 if parse_name == "config":
                                     csv_delimiter = file_cfg["parse_data"][parse_name].get("delimiter", ",")
-                                    csv_quotechar = file_cfg["parse_data"][parse_name].get("quotechar", "|")
-                                    
+                                    #csv_quotechar = file_cfg["parse_data"][parse_name].get("quotechar", "|")
+
                                     if ifile_name:
                                         csv_list = csv_handler(logger, filename=ifile_name, csv_delimiter=csv_delimiter)
                                     elif input_stream:
                                         csv_list = csv_handler(logger, csv_string=input_stream, csv_delimiter=csv_delimiter)
 
                                 else:
-                                    create_blankett(logger, csv_list, file_cfg["parse_data"], parse_name)
+                                    if identity and date_time:
+                                        identity = identity + " " + date_time
+
+                                    create_blankett(logger, csv_list, file_cfg["parse_data"], parse_name, identity)
                                     #for parse_entry_value in file_cfg["parse_data"][parse_name]:
                                     #    logger.debug("parse_entry: %s", parse_entry_value)
 
@@ -153,7 +160,7 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
 
     return create_file_data
 
-def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_name: str) -> str:
+def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_name: str, identity: str) -> str:
     '''
     TODO write info
     '''
@@ -187,7 +194,6 @@ def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_n
             value_extraction = blankett_list['config'].get("value_extraction", None)
             if value_extraction:
                 value_extraction = re.compile(value_extraction)
-
 
         else:
             for entry in blankett_list[entry_group]['data']:
