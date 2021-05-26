@@ -15,6 +15,7 @@ from logging import Logger
 import os
 from datetime import datetime
 import csv
+import re
 
 
 #logging.getLogger().setLevel(logging_level)
@@ -96,10 +97,10 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                     file_cfg = cfg_groups[config_group]['create_file'][file_to_create]
                     logger.debug("file_cfg: %s", file_cfg)
                     logger.debug("file_to_create: %s", file_to_create)
-                    create_file_data[file_to_create] = {}
                     
                     # Check in config if trigger exists otherwise run anyways
                     if file_cfg.get("trigger", True):
+                        create_file_data[file_to_create] = {}
                         # Handle metadata from yaml file
                         if "metadata" in file_cfg:
                             create_file_data[file_to_create]["metadata"] = file_cfg["metadata"]
@@ -141,15 +142,103 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                                     elif input_stream:
                                         csv_list = csv_handler(logger, csv_string=input_stream, csv_delimiter=csv_delimiter)
 
-                                    
                                 else:
-                                    for parse_entry_value in file_cfg["parse_data"][parse_name]:
-                                        logger.debug("parse_entry: %s", parse_entry_value)
-                                        
+                                    create_blankett(logger, csv_list, file_cfg["parse_data"], parse_name)
+                                    #for parse_entry_value in file_cfg["parse_data"][parse_name]:
+                                    #    logger.debug("parse_entry: %s", parse_entry_value)
+
                                         #continue with parsing of data values
+                                    #    file_cfg["parse_data"][parse_name][parse_entry_value]
 
 
     return create_file_data
+
+def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_name: str) -> str:
+    '''
+    TODO write info
+    '''
+    key_string = ""
+    blankett_template = {"amount": 0,
+                         "stock": 1,
+                         "sell": 2,
+                         "cost": 3,
+                         "gain": 4,
+                         "loss": 5
+                        }
+    format_to_numbers = ["sell", "cost"]
+    entry_template={}
+    txt = ""
+    separator = " "
+    start_number = 3100
+    end_number = 3195
+    entry_inc = 10
+    exchange_rate = None
+    add_part_sum = None
+    add_total_sum = None
+    value_extraction = None
+
+    # prepare data for parsing
+    for entry_group in blankett_list:
+        if entry_group == "config":
+            exchange_rate = blankett_list['config'].get("exchange_rate", None)
+            add_part_sum = blankett_list['config'].get("part_sum", None)
+            add_total_sum = blankett_list['config'].get("end_sum", None)
+            round_number = blankett_list['config'].get("round_value", None)
+            value_extraction = blankett_list['config'].get("value_extraction", None)
+            if value_extraction:
+                value_extraction = re.compile(value_extraction)
+
+
+        else:
+            for entry in blankett_list[entry_group]['data']:
+                key_string = blankett_list[entry_group]['data'][entry]
+                #logger.debug("key string: %s", key_string)
+                for column in csv_list[0]:
+                    #logger.debug("csv column: %s", column)
+                    if column == key_string:
+                        pos = csv_list[0].index(column)
+                        entry_template[pos] = blankett_template[entry]
+                        logger.debug("%s is %s on %s", entry, column, pos)
+
+    # do actual parsing and formatting of text
+    count = 0
+
+    for i, x in enumerate(format_to_numbers):
+        format_to_numbers[i] = blankett_template[x]
+
+    nr_code = start_number
+    for row in csv_list:
+        if count > 0:
+            line_txt = ""
+            for entry in entry_template:
+                id_num = entry_template[entry]
+                value = row[entry]
+                if entry_template[entry] in format_to_numbers and value_extraction:
+                    regex_match =  re.search(value_extraction, value).group()
+                    value = float(regex_match)
+                    if exchange_rate:
+                        value = value * exchange_rate
+                    if round_number is not None:
+                        if round_number == 0:
+                            value = round(value)
+                        else:
+                            value = round(value, round_number)
+
+                entry_id = nr_code + id_num
+                txt = txt + entry_name + separator + str(entry_id) + separator + str(value) + "\n"
+
+                #logger.debug("entry: %s, value: %s, nr code: %s", entry, value, nr_code)
+
+            txt = txt + line_txt
+            nr_code = nr_code + entry_inc
+
+        count = count + 1
+        if nr_code >= end_number:
+            break
+
+    print(txt)
+    logger.debug("entry template used: %s", entry_template)
+
 
 def csv_handler(logger: Logger, filename = None, csv_string=None, csv_delimiter = ',', csv_quotechar = '|'):
     '''
@@ -157,7 +246,6 @@ def csv_handler(logger: Logger, filename = None, csv_string=None, csv_delimiter 
 
     '''
     csv_list = []
-
 
     if filename:
         with open(filename, newline='') as csvfile:

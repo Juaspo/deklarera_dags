@@ -60,12 +60,11 @@ config_groups:
   tastyworks:
     create_file:
       INFO:
-        trigger: True
+        trigger: False
         metadata:
           filename: "INFO"
           extension: "log"
           separator: " "
-          #date_format: *date_format
         data:
           DATABESKRIVNING_START:
           PRODUKT:
@@ -104,16 +103,14 @@ config_groups:
         parse_data:
           config:
             delimiter: ','
-
+            exchange_rate: 8.2
+            part_sum: True
+            end_sum: True
+            round_value: 0
+            value_extraction: '[-+]?\d*\.\d+|\d+'
           UPPGIFT:
-            antal: "QUANTITY"
-            aktie: "UNDERLYING_SYMBOL"
-            sell: "PROCEEDS"
-            cost: "COST"
-            summa:
-              - "sell"
-              - "cost"
-        calculate:
-          SUMMA_KOP: 
-            
-            value: "TEXT"
+            data:
+              amount: "QUANTITY"
+              stock: "UNDERLYING_SYMBOL"
+              sell: "PROCEEDS"
+              cost: "COST"
