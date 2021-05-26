@@ -84,7 +84,9 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
     separator = " "
     identity = None
     csv_list = []
-    date_time = None
+    date_time = ""
+    pers_nr = ""
+    presign = ""
     
 
     for config_group in cfg_groups:
@@ -106,6 +108,7 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                         if "metadata" in file_cfg:
                             create_file_data[file_to_create]["metadata"] = file_cfg["metadata"]
                             separator = file_cfg["metadata"].get("separator", " ")
+                            presign = file_cfg["metadata"].get("presign", "")
 
                         # Handle data in yaml config file
                         if "data" in file_cfg:
@@ -119,16 +122,19 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                                     # Special case handling of data value keys
                                     date_value = file_cfg["data"][data_entry].get("datetime")
                                     if data_entry == "ORGNR":
-                                        identity = value
+                                        persnr = value
                                     if (date_value):
                                         date_time = get_datetime(logger, date_value)
                                         value = date_time
 
+                                    identitet = file_cfg["data"][data_entry].get("identity")
+                                    if identitet:
+                                        value = persnr + " " + date_time
 
                                 if value == "" or value is None:
-                                    data_txt = data_txt + data_entry + "\n"
+                                    data_txt = data_txt + presign + data_entry + "\n"
                                 else:
-                                    data_txt = data_txt + data_entry + separator + value +"\n"
+                                    data_txt = data_txt + presign + data_entry + separator + value +"\n"
                             create_file_data[file_to_create]["data"] = data_txt
 
                         logger.info("create_file_data: %s", create_file_data)
@@ -150,7 +156,9 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                                     if identity and date_time:
                                         identity = identity + " " + date_time
 
-                                    create_blankett(logger, csv_list, file_cfg["parse_data"], parse_name, identity)
+                                    entry_name = presign + parse_name
+                                    # Todo pass entire BLANKETTER dict
+                                    create_file_data["BLANKETTER"]["data"] = create_blankett(logger, csv_list, file_cfg["parse_data"], entry_name, create_file_data["BLANKETTER"]["data"], presign)
                                     #for parse_entry_value in file_cfg["parse_data"][parse_name]:
                                     #    logger.debug("parse_entry: %s", parse_entry_value)
 
@@ -160,7 +168,7 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
 
     return create_file_data
 
-def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_name: str, identity: str) -> str:
+def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_name: str, topinfo: str, presign = "") -> str:
     '''
     TODO write info
     '''
@@ -170,19 +178,27 @@ def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_n
                          "sell": 2,
                          "cost": 3,
                          "gain": 4,
-                         "loss": 5
+                         "loss": 5,
+                         "sum_sell": 3300,
+                         "sum_cost": 3301,
+                         "section": 7014
                         }
-    format_to_numbers = ["sell", "cost"]
+    format_to_number = ["sell", "cost"]
     entry_template={}
     txt = ""
     separator = " "
     start_number = 3100
-    end_number = 3195
+    end_number = 3185
     entry_inc = 10
     exchange_rate = None
     add_part_sum = None
     add_total_sum = None
     value_extraction = None
+    sum_sell = []
+    sum_cost = []
+    sell_sum = 0
+    cost_sum = 0
+    #entry_name = "#"+entry_name
 
     # prepare data for parsing
     for entry_group in blankett_list:
@@ -209,17 +225,28 @@ def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_n
     # do actual parsing and formatting of text
     count = 0
 
-    for i, x in enumerate(format_to_numbers):
-        format_to_numbers[i] = blankett_template[x]
+    for i, x in enumerate(format_to_number):
+        format_to_number[i] = blankett_template[x]
 
+    newfile = True
     nr_code = start_number
+    section_count = 0
     for row in csv_list:
         if count > 0:
             line_txt = ""
-            for entry in entry_template:
-                id_num = entry_template[entry]
-                value = row[entry]
-                if entry_template[entry] in format_to_numbers and value_extraction:
+            sell = 0
+            cost = 0
+
+            if newfile:
+                txt = txt + topinfo
+                section_count += 1
+                newfile = False
+
+
+            for column in entry_template:
+                id_num = entry_template[column]
+                value = row[column]
+                if entry_template[column] in format_to_number and value_extraction:
                     regex_match =  re.search(value_extraction, value).group()
                     value = float(regex_match)
                     if exchange_rate:
@@ -230,20 +257,38 @@ def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_n
                         else:
                             value = round(value, round_number)
 
+                    if id_num == 2: sell = value
+                    elif id_num == 3: cost = value
+
                 entry_id = nr_code + id_num
                 txt = txt + entry_name + separator + str(entry_id) + separator + str(value) + "\n"
+                #logger.debug("column: %s, value: %s, nr code: %s", column, value, nr_code)
 
-                #logger.debug("entry: %s, value: %s, nr code: %s", entry, value, nr_code)
-
-            txt = txt + line_txt
+            # calculate and add gain or loss entry
+            gain_loss = sell - cost
+            sell_sum += sell
+            cost_sum += cost
+            if gain_loss > 0:
+                entry_id = nr_code + blankett_template["gain"]
+                txt = txt + entry_name + separator + str(entry_id) + separator + str(gain_loss) + "\n"
+            else:
+                entry_id = nr_code + blankett_template["loss"]
+                txt = txt + entry_name + separator + str(entry_id) + separator + str(abs(gain_loss)) + "\n"
             nr_code = nr_code + entry_inc
 
         count = count + 1
         if nr_code >= end_number:
-            break
+            txt = txt + entry_name + separator + str(blankett_template["sum_sell"]) + separator + str(sell_sum) + "\n"
+            txt = txt + entry_name + separator + str(blankett_template["sum_cost"]) + separator + str(cost_sum) + "\n"
+            txt = txt + entry_name + separator + str(blankett_template["section"]) + separator + str(section_count) + "\n"
+            txt = txt + presign + "BLANKETTSLUT" + "\n"
+            nr_code = start_number
+            newfile = True
 
-    print(txt)
-    logger.debug("entry template used: %s", entry_template)
+    txt = txt + presign + "FIL_SLUT"
+    #print(txt)
+    #logger.debug("entry template used: %s", entry_template)
+    return txt
 
 
 def csv_handler(logger: Logger, filename = None, csv_string=None, csv_delimiter = ',', csv_quotechar = '|'):

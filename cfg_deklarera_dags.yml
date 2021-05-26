@@ -65,6 +65,7 @@ config_groups:
           filename: "INFO"
           extension: "log"
           separator: " "
+          presign: ""
         data:
           DATABESKRIVNING_START:
           PRODUKT:
@@ -93,13 +94,14 @@ config_groups:
         metadata:
           extension: "log"
           filename: "BLANKETTER"
+          presign: "#"
         data:
           BLANKETT:
             value: "K4-2021P4"
           IDENTITET:
-            value: "IDENTIET" #special case variable
-          NAMN:
-            value: *namn
+            identity: True #persnr date time
+          #NAMN: # optional
+          #  value: *namn
         parse_data:
           config:
             delimiter: ','
