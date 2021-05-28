@@ -327,7 +327,6 @@ def create_blankett(logger: Logger, csv_list: list, blankett_cfg: dict) -> str:
     sum = total_sell_sum - total_cost_sum
     logger.info("stats for ya:\nTotal sell: %s\nTotal cost: %s\nTotal Sum:  %s", total_sell_sum, total_cost_sum, sum)
     #print(txt)
-    #logger.debug("entry template used: %s", entry_template)
     return txt
 
 
@@ -355,7 +354,7 @@ def csv_handler(logger: Logger, filename: str=None, csv_string=None, csv_delimit
             csv_content = csv.reader(csvfile, delimiter=csv_delimiter, quotechar=csv_quotechar)
             for row in csv_content:
                 csv_list.append(row)
-        #logger.debug("returning csv list: %s", csv_list)
+        logger.debug("returning csv list: %s", csv_list)
         return csv_list
 
     elif csv_string:
@@ -363,7 +362,7 @@ def csv_handler(logger: Logger, filename: str=None, csv_string=None, csv_delimit
         for line in csv_lines:
             csv_row = line.split(csv_delimiter)
             csv_list.append(csv_row)
-        #logger.debug("returning csv list: %s", csv_list)
+        logger.debug("returning csv list: %s", csv_list)
         return csv_list
     else:
         logger.error("No filename or csv string provided")
