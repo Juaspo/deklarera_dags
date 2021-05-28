@@ -105,8 +105,6 @@ def parse_data(logger: Logger, cfg_content: str, ifile_name=None, input_stream=N
 
                     if file_to_create == "BLANKETTER":
                         blanketter_dict = file_cfg
-                    #logger.debug("file_cfg: %s", file_cfg)
-                    #logger.debug("file_to_create: %s", file_to_create)
                     
                     # Check in config if trigger exists otherwise run anyways
                     if file_cfg.get("trigger", True):
@@ -141,7 +139,7 @@ def parse_data(logger: Logger, cfg_content: str, ifile_name=None, input_stream=N
                                     data_txt = data_txt + presign + data_entry + separator + value +"\n"
                             create_file_data[file_to_create]["data"] = data_txt
 
-                        logger.info("create_file_data: %s", create_file_data)
+                        logger.debug("create_file_data: %s", create_file_data)
                         logger.debug("data_txt: %s", data_txt)
 
                         # Handle parsing of data from input stream
@@ -193,10 +191,10 @@ def create_blankett(logger: Logger, csv_list: list, blankett_cfg: dict) -> str:
     txt = ""
     separator = " "
     start_number = 3100
-    end_number = 3185
-    entry_inc = 10
+    end_number = 3185 # highest entry id allowed
+    entry_inc = 10 # increment entry id by this much for each new entry
     exchange_rate = None
-    value_extraction = None
+    value_extraction = None # regular expression to extract value from csv
     total_sell_sum = 0
     total_cost_sum = 0
     sell_sum = 0
@@ -329,7 +327,6 @@ def create_blankett(logger: Logger, csv_list: list, blankett_cfg: dict) -> str:
     sum = total_sell_sum - total_cost_sum
     logger.info("stats for ya:\nTotal sell: %s\nTotal cost: %s\nTotal Sum:  %s", total_sell_sum, total_cost_sum, sum)
     #print(txt)
-    #logger.debug("entry template used: %s", entry_template)
     return txt
 
 
@@ -447,12 +444,12 @@ def write_file(logger: Logger, content_str: str, file_name: str, file_path="", f
         file_path = ""
 
     file_path = os.path.join(file_path, file_name + "." + file_extension)
-    logger.info("Creating file: %s", file_path)
-    #logger.debug("Content to write: %s", content_str)
+    logger.debug("Content to write: %s", content_str)
 
     f = open(file_path, 'w')
     f.write(str(content_str))
     f.close()
+    logger.info("Created file: %s", file_path)
 
 if __name__ == "__main__":
     exit_code = 0

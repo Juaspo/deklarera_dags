@@ -59,8 +59,8 @@ config_groups:
         trigger: True
         metadata:
           filename: "INFO"
-          extension: "log"
-          separator: " "
+          extension: "SRU"
+          separator: " " # use if you want to replace space with some other char
           presign: "#"
         data:
           DATABESKRIVNING_START:
@@ -68,7 +68,7 @@ config_groups:
             value: 'SRU'
           MEDIAID:
           SKAPAD:
-            datetime: '%Y%m%d %H%M%S'
+            datetime: '%Y%m%d %H%M%S' # date format (YYYYMMDD HHMMSS)
           PROGRAM:
             value: 'declare_tax'
           FILNAMN:
@@ -88,21 +88,19 @@ config_groups:
       BLANKETTER:
         trigger: True
         metadata:
-          extension: "log"
+          extension: "SRU"
           filename: "BLANKETTER"
           presign: "#"
           blankett: "K4"
-          identity: True
+          identity: True # add id tag (persnr date time) to blanketter file
           separator: " "
           name: *namn
         parse_data:
           config:
-            delimiter: ','
+            delimiter: ',' # Used to seperate column in CSV file
             exchange_rate: 8.5
-            part_sum: True
-            end_sum: True
             round_value: 0
-            value_extraction: '[-+]?\d*\.\d+|\d+'
+            value_extraction: '[-+]?\d*\.\d+|\d+' # regular expression to extract value from csv
           UPPGIFT:
             parse:
               amount: "QUANTITY"
