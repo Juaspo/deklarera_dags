@@ -52,10 +52,6 @@
 namn: &namn 'Juaspo'
 persnr: &persnr '0987654321'
 
-general:
-  date_format: &date_format '%Y%m%d' #datetime format code
-  time_format: &time_format '%H%M%S' #datetime format code
-
 config_groups:
   tastyworks:
     create_file:
@@ -63,16 +59,16 @@ config_groups:
         trigger: True
         metadata:
           filename: "INFO"
-          extension: "log"
-          separator: " "
-          presign: ""
+          extension: "SRU"
+          separator: " " # use if you want to replace space with some other char
+          presign: "#"
         data:
           DATABESKRIVNING_START:
           PRODUKT:
             value: 'SRU'
           MEDIAID:
           SKAPAD:
-            datetime: '%Y%m%d %H%M%S'
+            datetime: '%Y%m%d %H%M%S' # date format (YYYYMMDD HHMMSS)
           PROGRAM:
             value: 'declare_tax'
           FILNAMN:
@@ -92,26 +88,21 @@ config_groups:
       BLANKETTER:
         trigger: True
         metadata:
-          extension: "log"
+          extension: "SRU"
           filename: "BLANKETTER"
           presign: "#"
-        data:
-          BLANKETT:
-            value: "K4-2021P4"
-          IDENTITET:
-            identity: True #persnr date time
-          #NAMN: # optional
-          #  value: *namn
+          blankett: "K4"
+          identity: True # add id tag (persnr date time) to blanketter file
+          separator: " "
+          name: *namn
         parse_data:
           config:
-            delimiter: ','
-            exchange_rate: 8.2
-            part_sum: True
-            end_sum: True
+            delimiter: ',' # Used to seperate column in CSV file
+            exchange_rate: 8.5
             round_value: 0
-            value_extraction: '[-+]?\d*\.\d+|\d+'
+            value_extraction: '[-+]?\d*\.\d+|\d+' # regular expression to extract value from csv
           UPPGIFT:
-            data:
+            parse:
               amount: "QUANTITY"
               stock: "UNDERLYING_SYMBOL"
               sell: "PROCEEDS"

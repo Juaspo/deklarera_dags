@@ -20,6 +20,7 @@ import re
 
 #logging.getLogger().setLevel(logging_level)
 
+g_DATETIME = None
 g_GENERAL_CFG = {}
 g_EXAMPLE_CSV = """TAX YEAR,FILE_CLOSING_DATE,CLOSE_DATE,OPENING_TRANSACTION,OPEN_DATE,UNDERLYING_SYMBOL,SECURITY_DESCRIPTION,QUANTITY,PROCEEDS,COST,CODE,GAIN_LOSS_ADJ,TERM,8949_BOX,GAIN_LOSS,CLOSING_TRANSACTION
 2020,05/13/21,12/02/20,BTO,11/27/20,PLTR,CALL PLTR   02/19/21    33,1,$00000239.84,$00000946.14, , ,S,B,-$00000706.30,STC
@@ -29,12 +30,6 @@ g_EXAMPLE_CSV = """TAX YEAR,FILE_CLOSING_DATE,CLOSE_DATE,OPENING_TRANSACTION,OPE
 2020,05/13/21,12/02/20,BTO,12/02/20,TSLA,PUT  TSLA   12/18/20   555,1,$00003899.77,$00003841.14, , ,S,B,$00000058.63,STC
 """
 
-g_BLANKETT_DATA = {
-    "antal": 0,
-    "aktie": 1,
-    "sell": 2,
-    "cost": 3
-}
 
 @click.command()
 @click.option('-c', '--cfg_file', 'cfg_file', default='cfg_deklarera_dags.yml', help='path to config file to us. Defailt is cfg_declare_tax.yml')
@@ -46,24 +41,24 @@ g_BLANKETT_DATA = {
 def main(cfg_file: str, logging_level: str, ifile_path: str, ofile_path: str) -> int:
 
     global g_EXAMPLE_CSV
+    input_str = None
 
     if not sys.stdin.isatty():
-        global g_EXAMPLE_CSV
-        g_EXAMPLE_CSV = ""
+        input_str = ""
         input_stream = sys.stdin
         for line in input_stream:
-            g_EXAMPLE_CSV = g_EXAMPLE_CSV + line
+            input_str = input_str + line
 
     logger = create_logger(logging_level)
     logger.debug("Piped text: %s", g_EXAMPLE_CSV)
 
     cfg = get_config(logger, cfg_file)
+
     if not cfg:
         logger.error("missing config exiting")
         sys.exit(os.EX_CONFIG)
-    #logger.info("printing cfg content")
 
-    parsed_content = parse_data(logger, cfg, ifile_name=ifile_path, input_stream=g_EXAMPLE_CSV)
+    parsed_content = parse_data(logger, cfg, ifile_name=ifile_path, input_stream=input_str)
 
     for content in parsed_content:
         if "metadata" in parsed_content[content]:
@@ -72,34 +67,44 @@ def main(cfg_file: str, logging_level: str, ifile_path: str, ofile_path: str) ->
                     parsed_content[content]["metadata"].get("file_path", ""),
                     parsed_content[content]["metadata"].get("extension", "txt"))
 
-    #write_file(logger, g_EXAMPLE_CSV, "csv", ofile_path, "txt")
-
     return 0
 
-def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=None) -> str:
+def parse_data(logger: Logger, cfg_content: str, ifile_name=None, input_stream=None) -> dict:
     '''
-    Takes input data 
+    Creates file templates based on configuration
+
+    input
+        logger: Logger
+        cfg_content: dict - yaml config content
+        ifile_name: str - input filename
+        input_stream: str - input stream content
+
+    return
+        dict - file template dicts
     '''
+
     create_file_data = {}
     separator = " "
     identity = None
     csv_list = []
     date_time = ""
-    pers_nr = ""
+    persnr = ""
     presign = ""
+    blanketter_dict = None
     
 
-    for config_group in cfg_groups:
+    for config_group in cfg_content:
         logger.debug("config_groups: %s", config_group)
 
-        for post in cfg_groups[config_group]:
+        for post in cfg_content[config_group]:
             logger.debug("post: %s", post)
             if post == "create_file":
-                for file_to_create in cfg_groups[config_group]['create_file']:
+                for file_to_create in cfg_content[config_group]['create_file']:
                     data_txt = ""
-                    file_cfg = cfg_groups[config_group]['create_file'][file_to_create]
-                    logger.debug("file_cfg: %s", file_cfg)
-                    logger.debug("file_to_create: %s", file_to_create)
+                    file_cfg = cfg_content[config_group]['create_file'][file_to_create]
+
+                    if file_to_create == "BLANKETTER":
+                        blanketter_dict = file_cfg
                     
                     # Check in config if trigger exists otherwise run anyways
                     if file_cfg.get("trigger", True):
@@ -108,7 +113,8 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                         if "metadata" in file_cfg:
                             create_file_data[file_to_create]["metadata"] = file_cfg["metadata"]
                             separator = file_cfg["metadata"].get("separator", " ")
-                            presign = file_cfg["metadata"].get("presign", "")
+                            presign = file_cfg["metadata"].get("presign", "**")
+                            identity = file_cfg["metadata"].get("identity")
 
                         # Handle data in yaml config file
                         if "data" in file_cfg:
@@ -124,12 +130,8 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                                     if data_entry == "ORGNR":
                                         persnr = value
                                     if (date_value):
-                                        date_time = get_datetime(logger, date_value)
+                                        date_time = get_datetime(date_value)
                                         value = date_time
-
-                                    identitet = file_cfg["data"][data_entry].get("identity")
-                                    if identitet:
-                                        value = persnr + " " + date_time
 
                                 if value == "" or value is None:
                                     data_txt = data_txt + presign + data_entry + "\n"
@@ -137,11 +139,11 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                                     data_txt = data_txt + presign + data_entry + separator + value +"\n"
                             create_file_data[file_to_create]["data"] = data_txt
 
-                        logger.info("create_file_data: %s", create_file_data)
+                        logger.debug("create_file_data: %s", create_file_data)
                         logger.debug("data_txt: %s", data_txt)
 
                         # Handle parsing of data from input stream
-                        if "parse_data" in file_cfg:
+                        if file_cfg.get("parse_data"):
                             for parse_name in file_cfg["parse_data"]:
                                 if parse_name == "config":
                                     csv_delimiter = file_cfg["parse_data"][parse_name].get("delimiter", ",")
@@ -153,25 +155,26 @@ def parse_data(logger: Logger, cfg_groups: str, ifile_name=None, input_stream=No
                                         csv_list = csv_handler(logger, csv_string=input_stream, csv_delimiter=csv_delimiter)
 
                                 else:
-                                    if identity and date_time:
-                                        identity = identity + " " + date_time
-
-                                    entry_name = presign + parse_name
-                                    # Todo pass entire BLANKETTER dict
-                                    create_file_data["BLANKETTER"]["data"] = create_blankett(logger, csv_list, file_cfg["parse_data"], entry_name, create_file_data["BLANKETTER"]["data"], presign)
-                                    #for parse_entry_value in file_cfg["parse_data"][parse_name]:
-                                    #    logger.debug("parse_entry: %s", parse_entry_value)
-
-                                        #continue with parsing of data values
-                                    #    file_cfg["parse_data"][parse_name][parse_entry_value]
+                                    if identity:
+                                        blanketter_dict["identity"] = persnr + " " + date_time
+                                    blanketter_dict["entryname"] = parse_name
+                                    create_file_data["BLANKETTER"]["data"] = create_blankett(logger, csv_list, blanketter_dict)
 
 
     return create_file_data
 
-def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_name: str, topinfo: str, presign = "") -> str:
+def create_blankett(logger: Logger, csv_list: list, blankett_cfg: dict) -> str:
     '''
-    TODO write info
+    Specific function to handle blankett output.
+
+    input
+        logger: Logger
+        blankett_cfg: dict - configurations for how to create blankett file
+
+    return
+        str - text result of blanketter
     '''
+
     key_string = ""
     blankett_template = {"amount": 0,
                          "stock": 1,
@@ -188,39 +191,71 @@ def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_n
     txt = ""
     separator = " "
     start_number = 3100
-    end_number = 3185
-    entry_inc = 10
+    end_number = 3185 # highest entry id allowed
+    entry_inc = 10 # increment entry id by this much for each new entry
     exchange_rate = None
-    add_part_sum = None
-    add_total_sum = None
-    value_extraction = None
-    sum_sell = []
-    sum_cost = []
+    value_extraction = None # regular expression to extract value from csv
+    total_sell_sum = 0
+    total_cost_sum = 0
     sell_sum = 0
     cost_sum = 0
-    #entry_name = "#"+entry_name
+    presign = ""
+    topinfo = ""
+    entry_name = None
+    blankett = None
+
+    if blankett_cfg is None:
+        logger.error("No blankett configuration found!")
+        return None
+
+    logger.debug("blankett cfg: %s", blankett_cfg)
+
 
     # prepare data for parsing
-    for entry_group in blankett_list:
-        if entry_group == "config":
-            exchange_rate = blankett_list['config'].get("exchange_rate", None)
-            add_part_sum = blankett_list['config'].get("part_sum", None)
-            add_total_sum = blankett_list['config'].get("end_sum", None)
-            round_number = blankett_list['config'].get("round_value", None)
-            value_extraction = blankett_list['config'].get("value_extraction", None)
-            if value_extraction:
-                value_extraction = re.compile(value_extraction)
+    if blankett_cfg.get("parse_data"):
+        for entry_group in blankett_cfg["parse_data"]:
+            if entry_group == "config":
+                exchange_rate = blankett_cfg["parse_data"][entry_group].get("exchange_rate", None)
+                round_number = blankett_cfg["parse_data"][entry_group].get("round_value", None)
+                value_extraction = blankett_cfg["parse_data"][entry_group].get("value_extraction", None)
+                if value_extraction:
+                    value_extraction = re.compile(value_extraction)
 
-        else:
-            for entry in blankett_list[entry_group]['data']:
-                key_string = blankett_list[entry_group]['data'][entry]
-                #logger.debug("key string: %s", key_string)
-                for column in csv_list[0]:
-                    #logger.debug("csv column: %s", column)
-                    if column == key_string:
-                        pos = csv_list[0].index(column)
-                        entry_template[pos] = blankett_template[entry]
-                        logger.debug("%s is %s on %s", entry, column, pos)
+            elif entry_group:
+                for entry in blankett_cfg["parse_data"][entry_group]['parse']:
+                    key_string = blankett_cfg["parse_data"][entry_group]['parse'][entry]
+                    #logger.debug("key string: %s", key_string)
+                    for column in csv_list[0]:
+                        #logger.debug("csv column: %s", column)
+                        if column == key_string:
+                            pos = csv_list[0].index(column)
+                            entry_template[pos] = blankett_template[entry]
+                            logger.debug("%s is %s on %s", entry, column, pos)
+    else:
+        logger.error("No parse_data configuration found!")
+        return None
+
+    # set configuration for blanketter
+    if blankett_cfg.get("metadata"):
+        presign = blankett_cfg["metadata"].get("presign")
+        separator = blankett_cfg["metadata"].get("separator", " ")
+        blankett = blankett_cfg["metadata"].get("blankett")
+        pers_name = blankett_cfg["metadata"].get("name")
+
+    entry_name = blankett_cfg.get("entryname")
+    entry_name = presign + entry_name if entry_name else ""
+
+    # Create information shown at top of Blankett
+    if blankett:
+        prev_year = int(get_datetime("%Y"))-1
+        blankett = presign + "BLANKETT" + separator + blankett + "-" + str(prev_year) + "P4\n"
+        topinfo = topinfo + blankett
+    identity = blankett_cfg.get("identity", "")
+    if identity:
+        topinfo = topinfo + presign + "IDENTITET" + separator + identity + "\n"
+    if pers_name:
+        pers_name = presign + "NAMN" + separator + pers_name + "\n"
+        topinfo = topinfo + pers_name
 
     # do actual parsing and formatting of text
     count = 0
@@ -233,15 +268,14 @@ def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_n
     section_count = 0
     for row in csv_list:
         if count > 0:
-            line_txt = ""
             sell = 0
             cost = 0
 
             if newfile:
                 txt = txt + topinfo
                 section_count += 1
+                sell_sum = cost_sum = 0
                 newfile = False
-
 
             for column in entry_template:
                 id_num = entry_template[column]
@@ -282,18 +316,36 @@ def create_blankett(logger: Logger, csv_list: list, blankett_list: dict, entry_n
             txt = txt + entry_name + separator + str(blankett_template["sum_cost"]) + separator + str(cost_sum) + "\n"
             txt = txt + entry_name + separator + str(blankett_template["section"]) + separator + str(section_count) + "\n"
             txt = txt + presign + "BLANKETTSLUT" + "\n"
+            total_sell_sum += sell_sum
+            total_cost_sum += cost_sum
+            
             nr_code = start_number
             newfile = True
 
     txt = txt + presign + "FIL_SLUT"
+
+    sum = total_sell_sum - total_cost_sum
+    logger.info("stats for ya:\nTotal sell: %s\nTotal cost: %s\nTotal Sum:  %s", total_sell_sum, total_cost_sum, sum)
     #print(txt)
     #logger.debug("entry template used: %s", entry_template)
     return txt
 
 
-def csv_handler(logger: Logger, filename = None, csv_string=None, csv_delimiter = ',', csv_quotechar = '|'):
+def csv_handler(logger: Logger, filename: str=None, csv_string=None, csv_delimiter = ',', csv_quotechar = '|'):
     '''
-    TODO write info
+    Converts CSV input to list matrix data
+    Takes in either CSV text in string format or filepath
+    to a CSV file.
+
+    input
+        logger: Logger
+        filename: str - filepath of CSV file
+        csv_string: str - CSV text in string format
+        csv_delimiter: str - CSV column separator
+        csv_quotechar: str - CSV quote char
+    
+    return
+        list - a list in list matrix
 
     '''
     csv_list = []
@@ -303,7 +355,7 @@ def csv_handler(logger: Logger, filename = None, csv_string=None, csv_delimiter 
             csv_content = csv.reader(csvfile, delimiter=csv_delimiter, quotechar=csv_quotechar)
             for row in csv_content:
                 csv_list.append(row)
-        logger.debug("returning csv list: %s", csv_list)
+        #logger.debug("returning csv list: %s", csv_list)
         return csv_list
 
     elif csv_string:
@@ -311,13 +363,13 @@ def csv_handler(logger: Logger, filename = None, csv_string=None, csv_delimiter 
         for line in csv_lines:
             csv_row = line.split(csv_delimiter)
             csv_list.append(csv_row)
-        logger.debug("returning csv list: %s", csv_list)
+        #logger.debug("returning csv list: %s", csv_list)
         return csv_list
     else:
         logger.error("No filename or csv string provided")
         return None
 
-def get_datetime(logger: Logger, date_format: str) -> datetime:
+def get_datetime(date_format: str=None) -> datetime:
     '''
     Fetch date and time and return value depending on
     format argument
@@ -329,9 +381,15 @@ def get_datetime(logger: Logger, date_format: str) -> datetime:
         datetime: str
     '''
 
-    date_now = datetime.today().strftime(date_format)
-    #logger.debug("date format: %s, converted to date: %s", date_format, date_now)
-    return date_now
+    global g_DATETIME
+
+    if g_DATETIME is None:
+        g_DATETIME = datetime.today()
+    
+    if date_format:
+        return g_DATETIME.strftime(date_format)
+
+    return None
 
 def create_logger(logging_level: str) -> Logger:
     '''
@@ -362,7 +420,7 @@ def get_config(logger: Logger, cfg_file: str) -> dict:
     try:
         with open(cfg_file, 'r') as file:
             cfg = yaml.safe_load(file)
-            #global g_GENERAL_CFG = cfg["general"]
+            logger.debug("yaml content: %s", cfg)
             return cfg["config_groups"]
     except yaml.YAMLError as e:
         logger.error(f"YAML file error: {e}")
@@ -387,12 +445,12 @@ def write_file(logger: Logger, content_str: str, file_name: str, file_path="", f
         file_path = ""
 
     file_path = os.path.join(file_path, file_name + "." + file_extension)
-    logger.info("Creating file: %s", file_path)
-    #logger.debug("Content to write: %s", content_str)
+    logger.debug("Content to write: %s", content_str)
 
     f = open(file_path, 'w')
     f.write(str(content_str))
     f.close()
+    logger.info("Created file: %s", file_path)
 
 if __name__ == "__main__":
     exit_code = 0
