@@ -62,7 +62,14 @@ def main(cfg_file: str, logging_level: str, ifile_path: str, ofile_path: str) ->
 
     for content in parsed_content:
         if "metadata" in parsed_content[content]:
-            write_file(logger, parsed_content[content].get("data", ""),
+            logger.debug("output: %s", ofile_path)
+            if ofile_path is not None:
+                write_file(logger, parsed_content[content].get("data", ""),
+                    parsed_content[content]["metadata"].get("filename", ""),
+                    ofile_path,
+                    parsed_content[content]["metadata"].get("extension", "txt"))
+            else:
+                write_file(logger, parsed_content[content].get("data", ""),
                     parsed_content[content]["metadata"].get("filename", ""),
                     parsed_content[content]["metadata"].get("file_path", ""),
                     parsed_content[content]["metadata"].get("extension", "txt"))
