@@ -50,7 +50,7 @@
 
 
 namn: &namn 'Juaspo'
-persnr: &persnr '0987654321'
+persnr: &persnr 'yyyymmddnnnn' #12 digits
 
 config_groups:
   tastyworks:
@@ -88,8 +88,8 @@ config_groups:
       BLANKETTER:
         trigger: True
         metadata:
-          extension: "SRU"
           filename: "BLANKETTER"
+          extension: "SRU"
           presign: "#"
           blankett: "K4"
           identity: True # add id tag (persnr date time) to blanketter file
@@ -98,7 +98,7 @@ config_groups:
         parse_data:
           config:
             delimiter: ',' # Used to seperate column in CSV file
-            exchange_rate: 8.5
+            exchange_rate: 8.5 # use current updated exchange rate
             round_value: 0
             value_extraction: '[-+]?\d*\.\d+|\d+' # regular expression to extract value from csv
           UPPGIFT:
