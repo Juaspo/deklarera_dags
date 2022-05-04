@@ -329,10 +329,17 @@ def create_blankett(logger: Logger, csv_list: list, blankett_cfg: dict) -> str:
             nr_code = start_number
             newfile = True
 
+
+    if not newfile:
+        txt = txt + presign + "BLANKETTSLUT" + "\n"
+        total_sell_sum += sell_sum
+        total_cost_sum += cost_sum
+
     txt = txt + presign + "FIL_SLUT"
 
     sum = total_sell_sum - total_cost_sum
-    logger.info("stats for ya:\nTotal sell: %s\nTotal cost: %s\nTotal Sum:  %s", total_sell_sum, total_cost_sum, sum)
+    logger.info("stats:\nExchange rate: %s\nTotal sell (SEK): %s\nTotal buy  (SEK): %s\nTotal Sum  (SEK): %s", 
+                exchange_rate, total_sell_sum, total_cost_sum, sum)
     #print(txt)
     return txt
 
